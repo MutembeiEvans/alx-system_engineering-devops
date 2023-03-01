@@ -1,46 +1,63 @@
 #!/usr/bin/python3
-""" Recursive API calls to Redit
-    and count occurrences
-"""
+""" Module for storing the count_words function. """
 from requests import get
 
 
-def count_words(subreddit, word_list, key_words={}, count={}, after=None):
-    """ get count of occurrence of words in word_list from
-        titles in hot articles in given subreddit
+def count_words(subreddit, word_list, word_count=[], page_after=None):
     """
-    if not count:
-        key_words = {word.lower(): 0 for word in word_list}
-        word_list = [word.lower() for word in word_list]
-        count = {word.lower(): word_list.count(word.lower())
-                 for word in word_list}
+    Prints the count of the given words present in the title of the
+    subreddit's hottest articles.
+    """
+    headers = {'User-Agent': 'HolbertonSchool'}
 
-    url = 'https://www.reddit.com/r/{}/hot.json'.format(subreddit)
-    params = {'after': after, 'limit': 100}
-    headers = {'user-agent': 'my-app/0.0.1'}
+    word_list = [word.lower() for word in word_list]
 
-    req = get(url, params=params, headers=headers, allow_redirects=False)
-    #  get data if request was successful
-    if req.status_code == 200:
-        data = req.json().get('data')
-        after = data.get('after')
-        posts = data.get('children')
+    if bool(word_count) is False:
+        for word in word_list:
+            word_count.append(0)
 
-        #  get count of key words in each title
-        for post in posts:
-            title = post.get('data').get('title').lower()
-            words = title.split()
-            for word in key_words.keys():
-                key_words[word] += words.count(word)
+    if page_after is None:
+        url = 'https://www.reddit.com/r/{}/hot.json'.format(subreddit)
+        r = get(url, headers=headers, allow_redirects=False)
+        if r.status_code == 200:
+            for child in r.json()['data']['children']:
+                i = 0
+                for i in range(len(word_list)):
+                    for word in [w for w in child['data']['title'].split()]:
+                        word = word.lower()
+                        if word_list[i] == word:
+                            word_count[i] += 1
+                    i += 1
 
-        #  call recursive function if there's more data
-        if after:
-            return count_words(subreddit, word_list, key_words, count, after)
-        else:
-            for key in key_words.keys():
-                key_words[key] *= count[key]
-            key_words = sorted(key_words.items(),
-                               key=lambda item: (-item[1], item[0]))
-            for item in key_words:
-                if item[1] > 0:
-                    print("{}: {}".format(item[0], item[1]))
+            if r.json()['data']['after'] is not None:
+                count_words(subreddit, word_list,
+                            word_count, r.json()['data']['after'])
+    else:
+        url = ('https://www.reddit.com/r/{}/hot.json?after={}'
+               .format(subreddit,
+                       page_after))
+        r = get(url, headers=headers, allow_redirects=False)
+
+        if r.status_code == 200:
+            for child in r.json()['data']['children']:
+                i = 0
+                for i in range(len(word_list)):
+                    for word in [w for w in child['data']['title'].split()]:
+                        word = word.lower()
+                        if word_list[i] == word:
+                            word_count[i] += 1
+                    i += 1
+            if r.json()['data']['after'] is not None:
+                count_words(subreddit, word_list,
+                            word_count, r.json()['data']['after'])
+            else:
+                dicto = {}
+                for key_word in list(set(word_list)):
+                    i = word_list.index(key_word)
+                    if word_count[i] != 0:
+                        dicto[word_list[i]] = (word_count[i] *
+                                               word_list.count(word_list[i]))
+
+                for key, value in sorted(dicto.items(),
+                                         key=lambda x: (-x[1], x[0])):
+                    print('{}: {}'.format(key, value))
